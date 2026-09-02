@@ -29,7 +29,7 @@ async function main() {
     if (words.length === 0) {
       continue;
     }
-    const commandWord = words[1];
+    const commandWord = words[0];
     if (commandWord === "pause") {
       console.log("Sending a pause message");
       await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, pauseState);
@@ -46,6 +46,7 @@ async function main() {
       console.log("Unknown command");
     }
   }
+  process.exit(0);
 }
 
 main().catch((err) => {
