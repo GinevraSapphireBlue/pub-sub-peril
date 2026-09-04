@@ -22,6 +22,17 @@ async function main() {
 
   await subscribeJSON(rabbitConn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gameState));
 
+  await processCommands(gameState);
+  
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});
+
+async function processCommands(gameState: GameState): Promise<void> {
   while (true) {
     const words = await getInput();
     if (words.length === 0)
@@ -59,10 +70,4 @@ async function main() {
       console.log("Unknown command");
     }
   }
-  process.exit(0);
 }
-
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
