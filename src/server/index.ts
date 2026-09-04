@@ -1,10 +1,10 @@
 import amqp, { type ConfirmChannel } from "amqplib";
 
-import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "../internal/routing/routing.js";
-import type { PlayingState } from "../internal/gamelogic/gamestate.js";
-import { publishJSON } from "../internal/pubsub/publish.js";
 import { printServerHelp, getInput } from "../internal/gamelogic/gamelogic.js";
+import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { declareAndBind, SimpleQueueType } from "../internal/pubsub/consume.js";
+import { publishJSON } from "../internal/pubsub/publish.js";
+import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "../internal/routing/routing.js";
 
 async function main() {
   console.log("Starting Peril server...");
@@ -12,22 +12,28 @@ async function main() {
   const rabbitConn = await amqp.connect(rabbitConnString);
   console.log("Connected to RabbitMQ");
 
-  process.on("SIGINT", async () => {
-    console.log("Shutting Peril server down");
-    await rabbitConn.close();
-    process.exit(0)
-  });
+  ["SIGINT", "SIGTERM"].forEach((signal) =>
+    process.on(signal, async () => {
+      console.log("Shutting Peril server down");
+      await rabbitConn.close();
+      process.exit(0)
+    }),
+  );
 
   const confirmChannel = await rabbitConn.createConfirmChannel();
   const pauseState: PlayingState = { isPaused: true };
-  await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, pauseState);
+  const resumeState: PlayingState = { isPaused: false };
+  try {
+    await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, pauseState);
+  } catch (err) {
+    console.error("Error publishing pause message: " + err);
+  }
   console.log("Published to confirm channel");
 
-  const [gameChannel, gameLogsQueue] = await declareAndBind(rabbitConn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
+  await declareAndBind(rabbitConn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
 
   printServerHelp();
-
-  await processCommands(confirmChannel, pauseState);
+  await processCommands(confirmChannel, pauseState, resumeState);
 
   process.exit(0);
 }
@@ -37,7 +43,7 @@ main().catch((err) => {
   process.exit(1);
 });
 
-async function processCommands(confirmChannel: ConfirmChannel, pauseState: PlayingState): Promise<void> {
+async function processCommands(confirmChannel: ConfirmChannel, pauseState: PlayingState, resumeState: PlayingState): Promise<void> {
   while (true) {
     const words = await getInput();
     if (words.length === 0) {
@@ -45,12 +51,20 @@ async function processCommands(confirmChannel: ConfirmChannel, pauseState: Playi
     }
     const commandWord = words[0];
     if (commandWord === "pause") {
-      console.log("Sending a pause message");
-      await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, pauseState);
+      try {
+        await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, pauseState);
+        console.log("Pause message sent");
+      } catch (err) {
+        console.error("Error publishing pause message: " + err);
+      }
     }
     else if (commandWord === "resume") {
-      console.log("Sending a resume message");
-      await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, { isPaused: false });
+      try {
+        await publishJSON(confirmChannel, ExchangePerilDirect, PauseKey, resumeState);
+        console.log("Resume message sent");
+      } catch (err) {
+        console.error("Error publishing resume message: " + err);
+      }
     }
     else if (commandWord === "quit") {
       console.log("Exiting");
