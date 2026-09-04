@@ -1,4 +1,4 @@
-import amqp from "amqplib";
+import amqp, { type ConfirmChannel } from "amqplib";
 
 import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "../internal/routing/routing.js";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
@@ -27,6 +27,17 @@ async function main() {
 
   printServerHelp();
 
+  await processCommands(confirmChannel, pauseState);
+
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});
+
+async function processCommands(confirmChannel: ConfirmChannel, pauseState: PlayingState): Promise<void> {
   while (true) {
     const words = await getInput();
     if (words.length === 0) {
@@ -49,10 +60,4 @@ async function main() {
       console.log("Unknown command");
     }
   }
-  process.exit(0);
 }
-
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
