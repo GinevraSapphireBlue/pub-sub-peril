@@ -7,8 +7,8 @@ import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { SimpleQueueType } from "../internal/pubsub/consume.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { subscribeJSON } from "../internal/pubsub/subscribe.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
-import { handlerMove, handlerPause } from "./handlers.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
+import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -34,7 +34,10 @@ async function main() {
   await subscribeJSON(rabbitConn, ExchangePerilDirect, `${PauseKey}.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(gameState));
 
   // Subscribe to moves of other players
-  await subscribeJSON(rabbitConn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gameState));
+  await subscribeJSON(rabbitConn, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gameState, confirmChannel));
+
+  // Subscribe to war events
+  await subscribeJSON(rabbitConn, ExchangePerilTopic, WarRecognitionsPrefix , `${WarRecognitionsPrefix}.*`, SimpleQueueType.Durable, handlerWar(gameState));
 
   // Command loop
   await processCommands(gameState, confirmChannel, username);

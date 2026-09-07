@@ -9,22 +9,22 @@ export async function subscribeJSON<T>(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
-  handler: (data: T) => AckType,
+  handler: (data: T) => AckType | Promise<AckType>,
 ): Promise<void> {
   const [channel, queue] = await declareAndBind(conn, exchange, queueName, key, queueType);
-  const msgConsumed = await channel.consume(queueName, (msg: amqp.ConsumeMessage | null) => {
+  const msgConsumed = await channel.consume(queueName, async (msg: amqp.ConsumeMessage | null) => {
     if (!msg)
       return;
     const parsedMsg = JSON.parse(msg.content.toString());
-    const acktype = handler(parsedMsg);
+    const acktype = await handler(parsedMsg);
     if (acktype === "Ack") {
-      console.log("subscribeJSON(): Recived Ack");
+      // console.log("subscribeJSON(): Recived Ack");
       channel.ack(msg);
     } else if (acktype === "NackRequeue") {
-      console.log("subscribeJSON(): Received NackRequeue");
+      // console.log("subscribeJSON(): Received NackRequeue");
       channel.nack(msg, false, true);
     } else if (acktype === "NackDiscard") {
-      console.log("subscribeJSON(): Received NackDiscard");
+      // console.log("subscribeJSON(): Received NackDiscard");
       channel.nack(msg, false, false);
     }
   });
